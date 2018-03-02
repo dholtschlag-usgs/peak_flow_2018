@@ -1,0 +1,141 @@
+--- 
+title: "Annual Peaks in Selected SW Michigan Streamgages"
+author: "Dave Holtschlag"
+date: "March 2, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(ggthemes)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Read Selected PeakFQ Statistics
+
+Tom Weaver provided a list of 22 streamgages in hydrologic subregion 0405 of southwestern Michigan for analysis of flood frequency characteristics.  Of these streamgages, ten had period-of-record maximum flows in late February 2018. 
+
+Four PeakFQ analyses were conducted: (1) Data through 2017 by B17B methods and weighted skew, (2) Data through 2017 by EMA methods and station skew, (3) through 2018 by B17B methods and weighted skew, (2) Data through 2018 by EMA methods and station skew. The regional skew used for the B17B methods was 0.081, with a mean square error of 0.20 (rmse 0.4472136). No regional skew value was available on the date of the analysis to use weighted skew with EMA methods. All analyses used the multiple Grubbs-Beck test for low-outliers.  
+
+The output from each of the four PeakFQ analysis was processed with python program read_data2.py to extract selected statistics for this analysis.  In this process, the PRT files for the 2018 analyses were modifed slightly by appended as '0' to the variance estimate for the 0.0020 AEP flood to distinguish so the variance estimate reads '0.00200' rather than '0.002 '.  This distinguished the variance estimate from the AEP used to key the read statement. 
+
+
+```{r PeakFQ_sum_stats}
+# Read output based on data through 2017 using B17B and weighted skew
+df2017_B17B <- read_tsv('data/WeaverSet_2017_B17B_WGT_MGB.out')
+# Read output based on data through 2017 using EMA  and stations skew
+df2017_EMA  <- read_tsv('data/WeaverSet_2017_EMA_STA_MGB.out')
+# Read output based on data through 2018 using B17B and weighted skew
+df2018_B17B <- read_tsv('data/WeaverSet_2018_B17B_WGT_MGB.out')
+# Read output based on data through 2018 using EMA  and stations skew
+df2018_EMA  <- read_tsv('data/WeaverSet_2018_EMA_STA_MGB.out')
+
+# Streamgages with Period of record peaks in 2018
+por_2018 <- c('04096015', '04096405', '04096515', '04097500', '04097540', 
+              '04101500', '04102500', '04104945', '04106400', '04111000', 
+              '04116000')
+
+# Initialize logical field for POR indicator
+df2017_B17B$por_2018 <- FALSE
+df2018_B17B$por_2018 <- FALSE
+df2017_EMA$por_2018  <- FALSE
+df2018_EMA$por_2018  <- FALSE
+
+# Find indices of POR streamgages
+ndx <- which(df2017_B17B$sta_no %in% por_2018)
+
+# Flag streamgages with POR in 2018
+df2017_B17B$por_2018[ndx] <- TRUE
+df2018_B17B$por_2018[ndx] <- TRUE
+df2017_EMA$por_2018[ndx]  <- TRUE
+df2018_EMA$por_2018[ndx]  <- TRUE
+
+
+df2018 <- 
+   left_join(df2018_B17B[, c('sta_no','sta_name', 'no_peaks','q_010_est', 'por_2018')],
+             df2018_EMA[, c('sta_no','q_010_est')], suffix = c('B17B','EMA'),
+             by = 'sta_no')
+
+knitr::kable(df2018[,c('sta_no', 'sta_name', 'no_peaks', 'q_010_estB17B', 'q_010_estEMA', 'por_2018')],
+                         caption = 'Selected streamgages in SW Michigan through 2018 based on B17B and EMA methods.')
+
+
+```
+
+***  
+## Relations among 0.01 AEP estimates using B17B methods for 2017 and 2018 
+
+```{r plots_q100_b17b_2017_2018, fig.height = 6, fig.width = 7}
+
+# merge data for B17B methods for years through 2017 and 2018
+df_B17B_17_18 <- 
+   left_join(df2017_B17B[,c('sta_no', 'q_010_est', 'por_2018')], df2018_B17B[, c('sta_no', 'q_010_est')],
+             suffix = c('2017', '2018'), by = 'sta_no')
+
+df_B17B_17_18 %>% 
+   ggplot( aes(x = q_010_est2017, y = q_010_est2018, color = por_2018)) +
+   geom_point() +
+   theme_few()  +
+   scale_x_continuous( trans = 'log10') +
+   scale_y_continuous( trans = 'log10') +
+   labs( x = 'Estimated 0.01 AEP Flow for B17B methods with data through 2017, in ft^3/s',
+         y = 'Estimated 0.01 AEP flow for B17B methods with data through 2018, in ft^3/s',
+         title = paste('Relation between 0.01 Annual Exceedance Probabilites for B17B methods','\n',
+                       'using data for 2017 and 2018 for selected streamgages in SW Michigan')) +
+   geom_abline( intercept = 0, slope = 1, color = 'forestgreen', linetype = 'dashed') 
+   
+
+```
+
+
+***  
+## Relations among 0.01 AEP estimates using EMA methods for 2017 and 2018 
+
+```{r plots_q100_ema_2017_2018, fig.height = 6, fig.width = 7}
+
+# merge data for B17B methods for years through 2017 and 2018
+df_EMA_17_18 <- 
+   left_join(df2017_EMA[,c('sta_no', 'q_010_est', 'por_2018')], df2018_EMA[, c('sta_no', 'q_010_est')],
+             suffix = c('2017', '2018'), by = 'sta_no')
+
+df_EMA_17_18 %>% 
+   ggplot( aes(x = q_010_est2017, y = q_010_est2018, color = por_2018)) +
+   geom_point() +
+   theme_few()  +
+   scale_x_continuous( trans = 'log10') +
+   scale_y_continuous( trans = 'log10') +
+   labs( x = 'Estimated 0.01 AEP Flow for EMA methods with data through 2017, in ft^3/s',
+         y = 'Estimated 0.01 AEP flow for EMA methods with data through 2018, in ft^3/s',
+         title = paste('Relation between 0.01 Annual Exceedance Probabilites for EMA methods','\n',
+                       'using data for 2017 and 2018 for selected streamgages in SW Michigan')) +
+   geom_abline( intercept = 0, slope = 1, color = 'forestgreen', linetype = 'dashed') 
+   
+
+```
+
+***  
+## Relations among 0.01 AEP estimates using B17B and EMA methods for data through 2018 
+
+```{r plots_q100_b17b_ema_2018, fig.height = 6, fig.width = 7}
+
+# merge data for B17B and EMA methods for 2018
+df_B17B_EMA_18 <- 
+   left_join(df2018_B17B[,c('sta_no', 'q_010_est', 'por_2018')], df2018_EMA[, c('sta_no', 'q_010_est')],
+             suffix = c('B17B', 'EMA'), by = 'sta_no') %>% 
+   mutate(log_diff = log10(q_010_estB17B) - log10(q_010_estEMA))
+
+df_B17B_EMA_18 %>% 
+   ggplot( aes(x = q_010_estB17B, y = q_010_estEMA, color = por_2018)) +
+   geom_point() +
+   theme_few()  +
+   scale_x_continuous( trans = 'log10') +
+   scale_y_continuous( trans = 'log10') +
+   labs( x = 'Estimated 0.01 AEP Flow for B17B methods with data through 2018, in ft^3/s',
+         y = 'Estimated 0.01 AEP flow for EMA methods with data through 2018, in ft^3/s',
+         title = paste('Relation between 0.01 Annual Exceedance Probabilites for B17B and EMA','\n',
+                       'methods using data through 2018 for selected streamgages in SW Michigan')) +
+   geom_abline( intercept = 0, slope = 1, color = 'forestgreen', linetype = 'dashed') 
+   # annotate(x = )
+   
+
+```
